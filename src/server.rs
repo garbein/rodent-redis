@@ -1,9 +1,10 @@
 use crate::db::Db;
-use async_std::io::{self, Read, BufReader};
+use async_std::io::{self, BufReader};
 use async_std::net::{TcpListener, TcpStream};
 use async_std::prelude::*;
 use async_std::task;
 use structopt::StructOpt;
+use crate::resp::Resp;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "rodent-redis-server")]
@@ -45,18 +46,19 @@ struct Handler {
 }
 
 impl Handler {
-    async fn run(&self, mut stream: TcpStream) -> io::Result<()> {
-        stream.bytes
-        let reader = BufReader::new(&stream);
-        let mut lines = reader.lines();
-        while let Some(line) = lines.next().await {
-            let line = line?;
-            if line.starts_with("*") {
-
-            }
-            println!("{}", line);
+    async fn run(&self, stream: TcpStream) -> anyhow::Result<()> {
+        let mut reader = BufReader::new(&stream);
+        let resp = Resp::parse(&mut reader).await?;
+        println!("{:?}", resp);
+        match resp {
+            Resp::Array(vec) => {
+                if let Resp::Bulk(v) = &vec[0] {
+                    println!("{:?}", String::from_utf8(v.to_vec()));
+                }
+               
+            },
+            _ => (),
         }
-        stream.write_all("+".as_bytes()).await?;
         Ok(())
     }
 }
