@@ -7,10 +7,10 @@ use crate::resp::Resp;
 #[derive(StructOpt, Debug)]
 #[structopt(name = "rodent-redis-cli")]
 pub struct Options {
-    #[structopt(name = "hostname", long = "-h", default_value = "127.0.0.1")]
+    #[structopt(name = "hostname", long = "--host", default_value = "127.0.0.1")]
     host: String,
 
-    #[structopt(name = "port", long = "-p", default_value = "6379")]
+    #[structopt(name = "port", long = "--port", default_value = "6380")]
     port: String,
 }
 
@@ -47,22 +47,25 @@ impl Client {
             cmd = format!("*{}\r\n{}", n, &cmd);
             stream.write_all(cmd.as_bytes()).await?;
 
-            // let mut buf = Vec::new();
-            // let n = stream.read(&mut buf).await?;
-            // stdout.write_all(&buf[..n]).await?;
-
             let mut reader = BufReader::new(&stream);
             let resp = Resp::parse(&mut reader).await?;
-            println!("{:?}", resp);
             match resp {
                 Resp::Simple(v) => println!("{:?}", String::from_utf8(v.to_vec())?),
                 Resp::Error(v) => println!("{:?}", String::from_utf8(v.to_vec())?),
                 Resp::Integer(v) => println!("{:?}", v),
                 Resp::Bulk(v) => {
                     stdout.write_all(&v).await?;
-                    stdout.flush().await?;
+                    println!("");
                 },
-                _  => println!("Err Type"),
+                Resp::Array(vec) => {
+                    for bulk in vec {
+                        if let Resp::Bulk(v) = bulk {
+                            stdout.write_all(&v).await?;
+                            println!("");
+                        }
+                    }
+                },
+                Resp::Null => println!("nil"),
             }
             
             stdout.write_all(prompt.as_bytes()).await?;
