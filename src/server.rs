@@ -101,7 +101,6 @@ impl Handler {
                                     _ => panic!("get error"),
                                 };
                                 let v_r = self.db.pop(k).await;
-                                println!("{:?}", v_r);
                                 let r = match v_r {
                                     Some(v) => format!("${}\r\n{}\r\n", v.len(), String::from_utf8(v).unwrap()),
                                     None => "$-1\r\n".to_string(),

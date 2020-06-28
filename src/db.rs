@@ -1,6 +1,6 @@
 use async_std::sync::Arc;
 use async_std::sync::Mutex;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 #[derive(Debug, Clone)]
 pub(crate) struct Db {
@@ -11,7 +11,7 @@ pub(crate) struct Db {
 #[derive(Debug, Clone)]
 struct Obj {
     item: Vec<u8>,
-    items: Vec<Vec<u8>>,
+    items: VecDeque<Vec<u8>>,
 }
 
 impl Obj {
@@ -19,7 +19,7 @@ impl Obj {
     pub(crate) fn new() -> Self {
         Obj {
             item: Vec::new(),
-            items: Vec::new(),
+            items: VecDeque::new(),
         }
     }
 }
@@ -48,11 +48,11 @@ impl Db {
     pub(crate) async fn push(&self, key: String, value: Vec<u8>) {
         let mut kv = self.kv.lock().await;
         if let Some(obj) = kv.get_mut(&key) {
-            obj.items.push(value);
+            obj.items.push_back(value);
         }
         else {
             let mut obj = Obj::new();
-            obj.items.push(value);
+            obj.items.push_back(value);
             kv.insert(key, obj);
         }
     }
@@ -60,7 +60,7 @@ impl Db {
     pub(crate) async fn pop(&self, key: String) -> Option<Vec<u8>> {
         let mut kv = self.kv.lock().await;
         if let Some(obj) = kv.get_mut(&key) {
-            return obj.items.pop();
+            return obj.items.pop_front();
         }
         None
     }
