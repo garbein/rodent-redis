@@ -5,13 +5,23 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub(crate) struct Db {
     id: u8,
-    kv: Arc<Mutex<HashMap<String, Vec<u8>>>>,
+    kv: Arc<Mutex<HashMap<String, Obj>>>,
 }
 
-#[derive(Debug)]
-struct Value {
-    id: u64,
-    data: Vec<u8>,
+#[derive(Debug, Clone)]
+struct Obj {
+    item: Vec<u8>,
+    items: Vec<Vec<u8>>,
+}
+
+impl Obj {
+
+    pub(crate) fn new() -> Self {
+        Obj {
+            item: Vec::new(),
+            items: Vec::new(),
+        }
+    }
 }
 
 impl Db {
@@ -25,11 +35,33 @@ impl Db {
 
     pub(crate) async fn set(&self, key: String, value: Vec<u8>) {
         let mut kv = self.kv.lock().await;
-        kv.insert(key, value);
+        let mut obj = Obj::new();
+        obj.item = value;
+        kv.insert(key, obj);
     }
 
     pub(crate) async fn get(&self, key: String) -> Option<Vec<u8>> {
         let kv = self.kv.lock().await;
-        kv.get(&key).map(|v| v.clone())
+        kv.get(&key).map(|v| v.item.clone())
+    }
+
+    pub(crate) async fn push(&self, key: String, value: Vec<u8>) {
+        let mut kv = self.kv.lock().await;
+        if let Some(obj) = kv.get_mut(&key) {
+            obj.items.push(value);
+        }
+        else {
+            let mut obj = Obj::new();
+            obj.items.push(value);
+            kv.insert(key, obj);
+        }
+    }
+
+    pub(crate) async fn pop(&self, key: String) -> Option<Vec<u8>> {
+        let mut kv = self.kv.lock().await;
+        if let Some(obj) = kv.get_mut(&key) {
+            return obj.items.pop();
+        }
+        None
     }
 }

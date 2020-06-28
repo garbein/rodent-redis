@@ -83,11 +83,36 @@ impl Handler {
                                 };
                                 stream.write_all(r.as_bytes()).await?;
                             },
-                            _ => {},
+                            b"push" => {
+                                let k = match &bulks[1] {
+                                    Resp::Bulk(t) => String::from_utf8(t.to_vec()).unwrap(),
+                                    _ => panic!("set error"),
+                                };
+                                let v = match &bulks[2] {
+                                    Resp::Bulk(t) => t,
+                                    _ => panic!("set error"),
+                                };
+                                self.db.push(k, v.to_vec()).await;
+                                &stream.write_all(b"+OK\r\n").await?;
+                            },
+                            b"pop" => {
+                                let k = match &bulks[1] {
+                                    Resp::Bulk(t) => String::from_utf8(t.to_vec()).unwrap(),
+                                    _ => panic!("get error"),
+                                };
+                                let v_r = self.db.pop(k).await;
+                                println!("{:?}", v_r);
+                                let r = match v_r {
+                                    Some(v) => format!("${}\r\n{}\r\n", v.len(), String::from_utf8(v).unwrap()),
+                                    None => "$-1\r\n".to_string(),
+                                };
+                                stream.write_all(r.as_bytes()).await?;
+                            },
+                            _ => stream.write_all("-Error unknown command\r\n".as_bytes()).await?,
                         }
                     }
                 }
-                _ => (),
+                _ => stream.write_all("-Error protocol error\r\n".as_bytes()).await?,
             }
             
         }
