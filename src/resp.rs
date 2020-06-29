@@ -2,7 +2,7 @@
 use async_std::io::prelude::BufReadExt;
 
 #[derive(Debug)]
-pub(crate) enum Resp {
+pub enum Resp {
     Simple(Vec<u8>),
     Error(Vec<u8>),
     Integer(i64),

@@ -1,6 +1,8 @@
 use async_std::sync::Arc;
 use async_std::sync::Mutex;
 use std::collections::{HashMap, VecDeque};
+use crate::commands::Command;
+use crate::resp::Resp;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Db {
@@ -31,6 +33,10 @@ impl Db {
             id: 0u8,
             kv: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    pub(crate) async fn ping(&self, cmd: Command) {
+        Resp::Simple(b"PONG")
     }
 
     pub(crate) async fn set(&self, key: String, value: Vec<u8>) {

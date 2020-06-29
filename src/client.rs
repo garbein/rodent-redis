@@ -3,6 +3,7 @@ use async_std::io::{self, BufReader};
 use async_std::net::TcpStream;
 use async_std::prelude::*;
 use structopt::StructOpt;
+use crate::networking;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "rodent-redis-cli")]
@@ -21,53 +22,11 @@ impl Client {
         Client {}
     }
 
-    unsafe fn setsockopt<T>(
-        &self,
-        fd: libc::c_int,
-        opt: libc::c_int,
-        val: libc::c_int,
-        payload: T,
-    ) -> io::Result<()>
-    where
-        T: Copy,
-    {
-        let payload = &payload as *const T as *const libc::c_void;
-        let res = libc::setsockopt(
-            fd,
-            opt,
-            val,
-            payload,
-            std::mem::size_of::<T>() as libc::socklen_t,
-        );
-        if res == -1 {
-            return Err(std::io::Error::last_os_error());
-        }
-        Ok(())
-    }
-
-    unsafe fn set_keepalive(&self, stream: &TcpStream, sec: i32) -> io::Result<()> {
-        use std::os::unix::io::AsRawFd;
-        let fd = stream.as_raw_fd();
-
-        self.setsockopt(fd, libc::SOL_SOCKET, libc::SO_KEEPALIVE, 1)?;
-
-        let mut val = sec;
-        self.setsockopt(fd, libc::IPPROTO_TCP, libc::TCP_KEEPIDLE, val)?;
-
-        val = sec / 3;
-        self.setsockopt(fd, libc::IPPROTO_TCP, libc::TCP_KEEPINTVL, val)?;
-
-        val = 3;
-        self.setsockopt(fd, libc::IPPROTO_TCP, libc::TCP_KEEPCNT, val)?;
-
-        Ok(())
-    }
-
     pub async fn run(&self, options: Options) -> anyhow::Result<()> {
         let mut stream = TcpStream::connect(format!("{}:{}", options.host, options.port)).await?;
 
         unsafe {
-            self.set_keepalive(&stream, 15)?;
+            networking::set_keepalive(&stream, 15)?;
         }
 
         let prompt = format!("{}> ", stream.peer_addr()?);
