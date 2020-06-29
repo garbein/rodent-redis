@@ -31,11 +31,17 @@ impl Server {
         let mut incoming = listener.incoming();
         while let Some(stream) = incoming.next().await {
             let stream = stream?;
+
             let handler = Handler {
                 db: server.db.clone(),
             };
+
             task::spawn(async move {
-                handler.run(stream).await.unwrap();
+                let h = handler.run(stream).await;
+                match h {
+                    Ok(_) => (),
+                    Err(e) => {println!("{:?}", e);},
+                }
             });
         }
         Ok(())
@@ -47,7 +53,55 @@ struct Handler {
 }
 
 impl Handler {
+
+    unsafe fn setsockopt<T>(
+        &self,
+        fd: libc::c_int,
+        opt: libc::c_int,
+        val: libc::c_int,
+        payload: T,
+    ) -> io::Result<()>
+    where
+        T: Copy,
+    {
+        let payload = &payload as *const T as *const libc::c_void;
+        let res = libc::setsockopt(
+            fd,
+            opt,
+            val,
+            payload,
+            std::mem::size_of::<T>() as libc::socklen_t,
+        );
+        if res == -1 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
+    unsafe fn set_keepalive(&self, stream: &TcpStream, sec: i32) -> io::Result<()> {
+        use std::os::unix::io::AsRawFd;
+        let fd = stream.as_raw_fd();
+
+        self.setsockopt(fd, libc::SOL_SOCKET, libc::SO_KEEPALIVE, 1)?;
+
+        let mut val = sec;
+        self.setsockopt(fd, libc::IPPROTO_TCP, libc::TCP_KEEPIDLE, val)?;
+
+        val = sec / 3;
+        self.setsockopt(fd, libc::IPPROTO_TCP, libc::TCP_KEEPINTVL, val)?;
+
+        val = 3;
+        self.setsockopt(fd, libc::IPPROTO_TCP, libc::TCP_KEEPCNT, val)?;
+
+        Ok(())
+    }
+
     async fn run(&self, mut stream: TcpStream) -> anyhow::Result<()> {
+
+        unsafe {
+            self.set_keepalive(&stream, 15)?;
+        }
+
         loop {
             let mut reader = BufReader::new(&stream);
             let resp = Resp::parse(&mut reader).await?;

@@ -8,9 +8,10 @@ edition = "2018"
 
 [dependencies]
 structopt = "0.3"
-async-std = { version = "1.6.0", features = ["attributes"] }
+async-std = { version = "1.6.2", features = ["attributes"] }
 anyhow = "1.0"
 atoi = "0.3.2"
+libc = "0.2.71"
 
 [[bin]]
 name = "rodent-redis-cli"
