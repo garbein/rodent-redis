@@ -2,7 +2,7 @@ use async_std::sync::Arc;
 use async_std::sync::Mutex;
 use std::collections::{HashMap, VecDeque};
 use crate::commands::CommandInfo;
-use crate::resp::Resp::{self, *};
+use crate::resp::Resp;
 
 #[derive(Debug, Clone)]
 pub struct Db {
@@ -43,13 +43,14 @@ impl Db {
         match k {
             b"set" => self.set(cmd).await,
             b"get" => self.get(cmd).await,
-            _ => Null,
-        };
-        Simple(b"PONG".to_vec())
+            b"lpush" => self.push(cmd).await,
+            b"rpop" => self.pop(cmd).await,
+            _ => Resp::Null,
+        }
     }
 
     pub async fn ping(&self) -> Resp {
-        Simple(b"PONG".to_vec())
+        Resp::Simple(b"PONG".to_vec())
     }
 
     pub async fn set(&self, cmd: CommandInfo) -> Resp {
@@ -57,7 +58,7 @@ impl Db {
         let mut obj = Obj::new();
         obj.item = cmd.args[0].clone();
         kv.insert(cmd.key, obj);
-        Simple(b"OK".to_vec())
+        Resp::Simple(b"OK".to_vec())
     }
 
     pub async fn get(&self, cmd: CommandInfo) -> Resp {
@@ -69,23 +70,29 @@ impl Db {
         }
     }
 
-    pub async fn push(&self, key: String, value: Vec<u8>) {
+    pub async fn push(&self, cmd: CommandInfo) -> Resp {
         let mut kv = self.kv.lock().await;
-        if let Some(obj) = kv.get_mut(&key) {
-            obj.items.push_back(value);
+        let v = cmd.args[0].clone();
+        let mut len = 1;
+        if let Some(obj) = kv.get_mut(&cmd.key) {
+            obj.items.push_back(v);
+            len = obj.items.len();
         }
         else {
             let mut obj = Obj::new();
-            obj.items.push_back(value);
-            kv.insert(key, obj);
+            obj.items.push_back(v);
+            kv.insert(cmd.key, obj);
         }
+        Resp::Integer(len as i64)
     }
 
-    pub async fn pop(&self, key: String) -> Option<Vec<u8>> {
+    pub async fn pop(&self, cmd: CommandInfo) -> Resp {
         let mut kv = self.kv.lock().await;
-        if let Some(obj) = kv.get_mut(&key) {
-            return obj.items.pop_front();
+        if let Some(obj) = kv.get_mut(&cmd.key) {
+            if let Some(v) = obj.items.pop_front() {
+                return Resp::Bulk(v);
+            }
         }
-        None
+        Resp::Null
     }
 }

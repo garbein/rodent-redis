@@ -70,7 +70,7 @@ impl Handler {
             match CommandInfo::from_resp(resp) {
                 Ok(t) => cmd = t,
                 Err(e) => {
-                    self.write_error(&mut stream, &e.to_string()).await?;
+                    self.write_error(&mut stream, e.to_string()).await?;
                     continue;
                 }
             };
@@ -104,7 +104,7 @@ impl Handler {
         stream.write_all(&buf).await
     }
 
-    async fn write_error(&self, stream: &mut TcpStream, e: &str) -> io::Result<()> {
-        stream.write_all(e.as_bytes()).await
+    async fn write_error(&self, stream: &mut TcpStream, e: String) -> io::Result<()> {
+        stream.write_all(format!("-{}\r\n", e).as_bytes()).await
     }
 }

@@ -21,7 +21,13 @@ impl CommandInfo {
     }
 
     pub fn find_command(name: &[u8]) -> anyhow::Result<Command> {
-        let cmd_tables = vec![Command(b"ping", 1), Command(b"set", 3)];
+        let cmd_tables = vec![
+            Command(b"ping", 1),
+            Command(b"set", 3),
+            Command(b"get", 2),
+            Command(b"lpush", 3),
+            Command(b"rpop", 2),
+        ];
         for command in cmd_tables {
             if name == command.0 {
                 return Ok(command);
