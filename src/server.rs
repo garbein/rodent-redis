@@ -1,3 +1,4 @@
+use crate::commands::CommandInfo;
 use crate::db::Db;
 use crate::networking;
 use crate::resp::Resp;
@@ -65,84 +66,45 @@ impl Handler {
         loop {
             let mut reader = BufReader::new(&stream);
             let resp = Resp::parse(&mut reader).await?;
-            match resp {
-                Resp::Array(bulks) => {
-                    if let Resp::Bulk(vec) = &bulks[0] {
-                        let cmd = &vec[..];
-                        match cmd {
-                            b"ping" => {
-                                &stream.write_all(b"+PONG\r\n").await?;
-                            }
-                            b"set" => {
-                                let k = match &bulks[1] {
-                                    Resp::Bulk(t) => String::from_utf8(t.to_vec()).unwrap(),
-                                    _ => panic!("set error"),
-                                };
-                                let v = match &bulks[2] {
-                                    Resp::Bulk(t) => t,
-                                    _ => panic!("set error"),
-                                };
-                                self.db.set(k, v.to_vec()).await;
-                                &stream.write_all(b"+OK\r\n").await?;
-                            }
-                            b"get" => {
-                                let k = match &bulks[1] {
-                                    Resp::Bulk(t) => String::from_utf8(t.to_vec()).unwrap(),
-                                    _ => panic!("get error"),
-                                };
-                                let v_r = self.db.get(k).await;
-                                let r = match v_r {
-                                    Some(v) => format!(
-                                        "${}\r\n{}\r\n",
-                                        v.len(),
-                                        String::from_utf8(v).unwrap()
-                                    ),
-                                    None => "$-1\r\n".to_string(),
-                                };
-                                stream.write_all(r.as_bytes()).await?;
-                            }
-                            b"lpush" => {
-                                let k = match &bulks[1] {
-                                    Resp::Bulk(t) => String::from_utf8(t.to_vec()).unwrap(),
-                                    _ => panic!("set error"),
-                                };
-                                let v = match &bulks[2] {
-                                    Resp::Bulk(t) => t,
-                                    _ => panic!("set error"),
-                                };
-                                self.db.push(k, v.to_vec()).await;
-                                &stream.write_all(b"+OK\r\n").await?;
-                            }
-                            b"rpop" => {
-                                let k = match &bulks[1] {
-                                    Resp::Bulk(t) => String::from_utf8(t.to_vec()).unwrap(),
-                                    _ => panic!("get error"),
-                                };
-                                let v_r = self.db.pop(k).await;
-                                let r = match v_r {
-                                    Some(v) => format!(
-                                        "${}\r\n{}\r\n",
-                                        v.len(),
-                                        String::from_utf8(v).unwrap()
-                                    ),
-                                    None => "$-1\r\n".to_string(),
-                                };
-                                stream.write_all(r.as_bytes()).await?;
-                            }
-                            _ => {
-                                stream
-                                    .write_all("-Error unknown command\r\n".as_bytes())
-                                    .await?
-                            }
-                        }
-                    }
+            let cmd;
+            match CommandInfo::from_resp(resp) {
+                Ok(t) => cmd = t,
+                Err(e) => {
+                    self.write_error(&mut stream, &e.to_string()).await?;
+                    continue;
                 }
-                _ => {
-                    stream
-                        .write_all("-Error protocol error\r\n".as_bytes())
-                        .await?
-                }
-            }
+            };
+            let resp = self.db.execute(cmd).await;
+            self.write_resp(&mut stream, resp).await?;
         }
+    }
+
+    async fn write_resp(&self, stream: &mut TcpStream, resp: Resp) -> io::Result<()> {
+        let mut crlf = vec![b'\r', b'\n'];
+        let mut buf;
+        match resp {
+            Resp::Simple(mut v) => {
+                buf = vec![b'+'];
+                buf.append(&mut v);
+                buf.append(&mut crlf);
+            }
+            Resp::Error(mut v) => {
+                buf = vec![b'-'];
+                buf.append(&mut v);
+                buf.append(&mut crlf);
+            }
+            Resp::Integer(v) => buf = format!(":{}\r\n", v).as_bytes().to_vec(),
+            Resp::Bulk(mut v) => {
+                buf = vec![b'$', v.len() as u8, b'\r', b'\n'];
+                buf.append(&mut v);
+                buf.append(&mut crlf);
+            }
+            _ => buf = "$-1\r\n".as_bytes().to_vec(),
+        };
+        stream.write_all(&buf).await
+    }
+
+    async fn write_error(&self, stream: &mut TcpStream, e: &str) -> io::Result<()> {
+        stream.write_all(e.as_bytes()).await
     }
 }
