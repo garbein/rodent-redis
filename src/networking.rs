@@ -30,14 +30,17 @@ pub unsafe fn set_keepalive(stream: &TcpStream, sec: i32) -> io::Result<()> {
 
     self::setsockopt(fd, libc::SOL_SOCKET, libc::SO_KEEPALIVE, 1)?;
 
-    let mut val = sec;
-    self::setsockopt(fd, libc::IPPROTO_TCP, libc::TCP_KEEPIDLE, val)?;
+    #[cfg(target_os = "linux")]
+    {
+        let mut val = sec;
+        self::setsockopt(fd, libc::IPPROTO_TCP, libc::TCP_KEEPIDLE, val)?;
 
-    val = sec / 3;
-    self::setsockopt(fd, libc::IPPROTO_TCP, libc::TCP_KEEPINTVL, val)?;
+        val = sec / 3;
+        self::setsockopt(fd, libc::IPPROTO_TCP, libc::TCP_KEEPINTVL, val)?;
 
-    val = 3;
-    self::setsockopt(fd, libc::IPPROTO_TCP, libc::TCP_KEEPCNT, val)?;
+        val = 3;
+        self::setsockopt(fd, libc::IPPROTO_TCP, libc::TCP_KEEPCNT, val)?;
+    }
 
     Ok(())
 }
