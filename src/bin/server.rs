@@ -1,3 +1,7 @@
+//! rodent-redis-server
+//! 默认主机: 127.0.0.1
+//! 默认端口: 6380
+
 use structopt::StructOpt;
 use async_std::io;
 use rodent_redis::server::{Config, Server};

@@ -1,18 +1,27 @@
 
 use async_std::io::prelude::BufReadExt;
 
+/// redis协议枚举
+/// 请求和回复都使用
 #[derive(Debug)]
 pub enum Resp {
+    /// + 单行回复
     Simple(Vec<u8>),
+    /// - 错误回复
     Error(Vec<u8>),
+    /// : 整数回复
     Integer(i64),
+    /// $ 批量回复
     Bulk(Vec<u8>),
+    /// * 多个批量回复
     Array(Vec<Resp>),
+    /// 空
     Null,
 }
 
 impl Resp {
 
+    /// 解析redis协议
     pub async fn parse(mut reader: impl BufReadExt + std::marker::Unpin) -> anyhow::Result<Resp> 
     {
         let mut buf = Vec::new();
