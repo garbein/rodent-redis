@@ -112,7 +112,7 @@ impl Handler {
             }
             Resp::Integer(v) => buf = format!(":{}\r\n", v).as_bytes().to_vec(),
             Resp::Bulk(mut v) => {
-                buf = vec![b'$', v.len() as u8, b'\r', b'\n'];
+                buf = format!("${}\r\n", v.len()).as_bytes().to_vec();
                 buf.append(&mut v);
                 buf.append(&mut crlf);
             }
